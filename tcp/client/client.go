@@ -18,7 +18,19 @@ func main() {
 		return
 	}
 	defer conn.Close()
-	fmt.Println("Connected to chat server.")
+
+	// Prompt for nickname
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Print("Enter your nickname: ")
+	nickname, _ := reader.ReadString('\n')
+	nickname = strings.TrimSpace(nickname)
+	if nickname == "" {
+		nickname = "Anonymous"
+	}
+	// Send nickname to server as the first message
+	conn.Write([]byte("/name " + nickname + "\n"))
+
+	fmt.Println("Connected to chat server as", nickname)
 
 	// Graceful exit on Ctrl+C
 	sig := make(chan os.Signal, 1)
@@ -41,7 +53,7 @@ func main() {
 	}()
 
 	// Read input from user and send to server
-	reader := bufio.NewReader(os.Stdin)
+	// reader := bufio.NewReader(os.Stdin)
 	for {
 		fmt.Print("You: ")
 		text, err := reader.ReadString('\n')
