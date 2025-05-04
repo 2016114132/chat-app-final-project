@@ -24,10 +24,8 @@ func main() {
 	reader := bufio.NewReader(os.Stdin)
 	fmt.Print("Enter your nickname: ")
 	nickname, _ := reader.ReadString('\n')
-	nickname = shared.SanitizeInput(nickname)
-	if nickname == "" {
-		nickname = "Anonymous"
-	}
+	nickname = shared.FormatName(nickname)
+
 	// Send nickname to server as the first message
 	conn.Write([]byte("/name " + nickname + "\n"))
 

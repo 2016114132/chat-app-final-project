@@ -30,7 +30,7 @@ func handleConnection(conn net.Conn) {
 		return
 	}
 	if shared.IsCommand(line, "name") {
-		name = shared.SanitizeInput(strings.TrimPrefix(line, "/name "))
+		name = shared.FormatName(strings.TrimPrefix(line, "/name "))
 	}
 
 	// Register client

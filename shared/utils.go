@@ -21,3 +21,12 @@ func FormatMessage(sender, message string) string {
 func IsCommand(input, command string) bool {
 	return strings.HasPrefix(strings.ToLower(input), "/"+command)
 }
+
+// Handle blank of bad name values
+func FormatName(name string) string {
+	n := SanitizeInput(name)
+	if n == "" {
+		return "Anonymous"
+	}
+	return n
+}
