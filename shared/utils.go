@@ -1,4 +1,4 @@
-// Shared helpers if needed. Maybe like formatting, logging, etc.package shared
+// Shared helpers for formatting, validation, and command parsing used by both TCP and UDP clients/servers.
 package shared
 
 import (
@@ -6,23 +6,28 @@ import (
 	"strings"
 )
 
-// Trims and normalizes user input
+// SanitizeInput trims leading and trailing whitespace (spaces, tabs, newlines) from user input.
+// This helps prevent accidental message formatting issues and removes empty lines.
 func SanitizeInput(input string) string {
 	return strings.TrimSpace(input)
 }
 
-// Formats a chat message with a name
+// FormatMessage constructs a standardized chat message format that includes the sender's name.
+// Example output: "[John]: Hello world"
 func FormatMessage(sender, message string) string {
 	sanitized := SanitizeInput(message)
 	return fmt.Sprintf("[%s]: %s", sender, sanitized)
 }
 
-// Detect special commands like /name
+// IsCommand checks if the input string starts with a forward slash (e.g., "/name") and matches the given command.
+// It is case-insensitive.
+// Used to detect commands like "/name", "/ping", etc.
 func IsCommand(input, command string) bool {
 	return strings.HasPrefix(strings.ToLower(input), "/"+command)
 }
 
-// Handle blank of bad name values
+// FormatName sanitizes and validates a user's nickname.
+// If the nickname is blank or only whitespace, it defaults to "Anonymous".
 func FormatName(name string) string {
 	n := SanitizeInput(name)
 	if n == "" {
