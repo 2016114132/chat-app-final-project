@@ -7,8 +7,9 @@ import (
 	"net"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
+
+	"github.com/2016114132/chat-app-final-project/shared"
 )
 
 func main() {
@@ -23,7 +24,7 @@ func main() {
 	reader := bufio.NewReader(os.Stdin)
 	fmt.Print("Enter your nickname: ")
 	nickname, _ := reader.ReadString('\n')
-	nickname = strings.TrimSpace(nickname)
+	nickname = shared.SanitizeInput(nickname)
 	if nickname == "" {
 		nickname = "Anonymous"
 	}
@@ -53,7 +54,6 @@ func main() {
 	}()
 
 	// Read input from user and send to server
-	// reader := bufio.NewReader(os.Stdin)
 	for {
 		fmt.Print("You: ")
 		text, err := reader.ReadString('\n')
@@ -61,7 +61,7 @@ func main() {
 			fmt.Println("Error:", err)
 			break
 		}
-		text = strings.TrimSpace(text)
+		text = shared.SanitizeInput(text)
 		if text == "" {
 			continue
 		}

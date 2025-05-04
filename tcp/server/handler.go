@@ -7,6 +7,8 @@ import (
 	"net"
 	"strings"
 	"sync"
+
+	"github.com/2016114132/chat-app-final-project/shared"
 )
 
 var (
@@ -27,8 +29,8 @@ func handleConnection(conn net.Conn) {
 		fmt.Println("Client disconnected before sending name.")
 		return
 	}
-	if strings.HasPrefix(line, "/name ") {
-		name = strings.TrimSpace(strings.TrimPrefix(line, "/name "))
+	if shared.IsCommand(line, "name") {
+		name = shared.SanitizeInput(strings.TrimPrefix(line, "/name "))
 	}
 
 	// Register client
@@ -38,7 +40,6 @@ func handleConnection(conn net.Conn) {
 
 	fmt.Printf("[+] %s connected\n", name)
 
-	// reader = bufio.NewReader(conn)
 	for {
 		message, err := reader.ReadString('\n')
 		if err != nil {
@@ -49,7 +50,7 @@ func handleConnection(conn net.Conn) {
 			return
 		}
 
-		broadcast := fmt.Sprintf("[%s]: %s", name, strings.TrimSpace(message))
+		broadcast := shared.FormatMessage(name, message)
 		broadcastMessage(conn, broadcast)
 	}
 }
@@ -59,7 +60,6 @@ func broadcastMessage(sender net.Conn, message string) {
 	defer mu.Unlock()
 	for client := range clients {
 		if client != sender {
-			// client.Write([]byte(message + "\n"))
 			_, err := client.Write([]byte(message + "\n"))
 			if err != nil {
 				fmt.Println("Error broadcasting:", err)
