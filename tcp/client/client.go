@@ -14,11 +14,12 @@ import (
 
 	"github.com/2016114132/chat-app-final-project/shared"
 )
+
 var (
-    messagesSent     int64
-    messagesReceived int64
-    startTime        time.Time
-	totalLatency	 int64 
+	messagesSent     int64
+	messagesReceived int64
+	startTime        time.Time
+	totalLatency     int64
 )
 
 func main() {
@@ -50,11 +51,11 @@ func main() {
 	go func() {
 		<-sig // Wait until signal is received
 		fmt.Println("\nDisconnected from chat.")
-		conn.Close() // Ensure connection is closed
+		conn.Close()   // Ensure connection is closed
 		printMetrics() // Print metrics before exiting
-		os.Exit(0)   // Exit the program
+		os.Exit(0)     // Exit the program
 	}()
-	
+
 	startTime = time.Now() // Record the start time for metrics
 
 	// Start a goroutine to continuously read and display messages from the server
@@ -62,24 +63,27 @@ func main() {
 		scanner := bufio.NewScanner(conn)
 		for scanner.Scan() {
 			atomic.AddInt64(&messagesReceived, 1) // Increment received message count
-			receivedTime := time.Now() // Record the time when the message is received
+			receivedTime := time.Now()            // Record the time when the message is received
 
 			//Extract and parse the timestamp from the message
 			message := scanner.Text()
 
-			parts:= strings.SplitN(message, "|", 2)	
+			parts := strings.SplitN(message, "|", 2)
 			if len(parts) == 2 {
 				sentTime, err := time.Parse(time.RFC3339Nano, parts[0])
 				if err == nil {
 					// Calculate the latency by subtracting the sent time from the received time
 					latency := receivedTime.Sub(sentTime).Nanoseconds()
 					atomic.AddInt64(&totalLatency, latency) // Add latency to the total
+
+					// Just keep the message part and remove the time after it has been used to calculate latency
+					message = parts[1]
 				}
 			}
 
 			// Use carriage return (\r) to overwrite the current prompt line
-			fmt.Printf("\r%s\n", scanner.Text()) // Display incoming message
-			fmt.Print("You: ")                   // Reprint input prompt
+			fmt.Printf("\r%s\n", message) // Display incoming message
+			fmt.Print("You: ")            // Reprint input prompt
 		}
 	}()
 
@@ -119,31 +123,31 @@ func main() {
 		atomic.AddInt64(&messagesSent, 1) // Increment sent message count
 	}
 }
-func printMetrics(){
+func printMetrics() {
 	duration := time.Since(startTime).Seconds()
 	received := atomic.LoadInt64(&messagesReceived)
-    sent := atomic.LoadInt64(&messagesSent)
+	sent := atomic.LoadInt64(&messagesSent)
 	latencySumValue := atomic.LoadInt64(&totalLatency)
 
-    var averageLatency float64
-    if received > 0 {
-        averageLatency = float64(latencySumValue) / float64(received)
-    } else {
-        averageLatency = 0 // No latency data available
-    }
+	var averageLatency float64
+	if received > 0 {
+		averageLatency = float64(latencySumValue) / float64(received) / 1e6
+	} else {
+		averageLatency = 0 // No latency data available
+	}
 
-    fmt.Printf("\n--- Metrics ---\n")
-    fmt.Printf("Messages Sent: %d\n", sent)
-    fmt.Printf("Messages Received: %d\n", received)
-    if sent > 0 {
-        fmt.Printf("Packet Loss: %.2f%%\n", 100*(1-float64(received)/float64(sent)))
-    } else {
-        fmt.Printf("Packet Loss: N/A\n")
-    }
-    if duration > 0 {
-        fmt.Printf("Throughput: %.2f messages/sec\n", float64(received)/duration)
-    } else {
-        fmt.Printf("Throughput: N/A\n")
-    }
-    fmt.Printf("Average Latency: %.2f ms\n", averageLatency)
+	fmt.Printf("\n--- Metrics ---\n")
+	fmt.Printf("Messages Sent: %d\n", sent)
+	fmt.Printf("Messages Received: %d\n", received)
+	if sent > 0 {
+		fmt.Printf("Packet Loss: %.2f%%\n", 100*(1-float64(received)/float64(sent)))
+	} else {
+		fmt.Printf("Packet Loss: N/A\n")
+	}
+	if duration > 0 {
+		fmt.Printf("Throughput: %.2f messages/sec\n", float64(received)/duration)
+	} else {
+		fmt.Printf("Throughput: N/A\n")
+	}
+	fmt.Printf("Average Latency: %.2f ms\n", averageLatency)
 }

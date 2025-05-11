@@ -16,7 +16,15 @@ func SanitizeInput(input string) string {
 // Example output: "[John]: Hello world"
 func FormatMessage(sender, message string) string {
 	sanitized := SanitizeInput(message)
-	return fmt.Sprintf("[%s]: %s", sender, sanitized)
+
+	parts := strings.SplitN(sanitized, "|", 2)
+	if len(parts) == 2 {
+		sanitized = fmt.Sprintf("%s|[%s]: %s", parts[0], sender, parts[1])
+	} else {
+		sanitized = fmt.Sprintf("[%s]: %s", sender, sanitized)
+	}
+
+	return sanitized
 }
 
 // IsCommand checks if the input string starts with a forward slash (e.g., "/name") and matches the given command.

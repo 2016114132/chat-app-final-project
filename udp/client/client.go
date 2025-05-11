@@ -15,14 +15,12 @@ import (
 
 	"github.com/2016114132/chat-app-final-project/shared"
 )
+
 var (
-    messagesSent     int64
-    messagesReceived int64
-    startTime        time.Time
-	latencySum	  	int64 
-	latencyCount	  int64 
-	latencyMutex	  sync.Mutex 
-	pingTimestamps	  =make(map[string]time.Time)
+	messagesSent     int64
+	messagesReceived int64
+	startTime        time.Time
+	totalLatency     int64
 )
 
 func main() {
@@ -35,7 +33,7 @@ func main() {
 
 	// Establish a UDP connection to the server
 	conn, err := net.DialUDP("udp", nil, serverAddr)
-	if err != nil { 
+	if err != nil {
 		fmt.Println("Dial error:", err)
 		return
 	}
@@ -52,39 +50,30 @@ func main() {
 
 	fmt.Println("Connected to UDP chat as", nickname)
 
+	var wg sync.WaitGroup
+	stopChan := make(chan struct{})
+
+	startTime = time.Now()
+
 	// Handle graceful exit when Ctrl+C or kill signal is received
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-
-	//Channel to signal the reading goroutine to stop
-	stopChan := make(chan struct{})
-	// Start a goroutine to handle the signal
-	var wg sync.WaitGroup
-
-	// Record the start time for metrics
-	startTime = time.Now() 
+	go func() {
+		<-sig
+		fmt.Println("\nDisconnected.")
+		close(stopChan) // Signal the read loop to stop
+		conn.Close()    // Close the connection
+		wg.Wait()       // Wait for read goroutine to exit
+		printMetrics()  // Print your final metrics
+		os.Exit(0)
+	}()
 
 	// Start a goroutine that sends periodic "/ping" messages to the server
 	// This acts as a heartbeat to let the server know the client is still active
 	go func() {
 		for {
-			select {
-				case <-stopChan:
-					return
-				default:
-					// Sleep for 2 seconds before sending the next ping
-					time.Sleep(2 * time.Second)
-					timestamp := time.Now()
-					messageID := fmt.Sprintf("%d", timestamp.UnixNano()) // Unique message ID
-					pingMessage := fmt.Sprintf("/ping %s\n", messageID)
-
-					latencyMutex.Lock()
-					pingTimestamps[messageID] = timestamp // Store the timestamp for this ping
-					latencyMutex.Unlock()
-
-					conn.Write([]byte(pingMessage))
-				
-			}
+			time.Sleep(2 * time.Second)
+			conn.Write([]byte("/ping\n"))
 		}
 	}()
 
@@ -93,63 +82,40 @@ func main() {
 	go func() {
 		defer wg.Done()
 
-		// Create a buffer for incoming data
 		buffer := make([]byte, 1024)
 		for {
 			select {
 			case <-stopChan:
 				return
 			default:
-				conn.SetReadDeadline(time.Now().Add(1 * time.Second)) // Prevent blocking forever
-				
+				conn.SetReadDeadline(time.Now().Add(1 * time.Second)) // avoid blocking forever
+
 				n, _, err := conn.ReadFromUDP(buffer)
 				if err != nil {
-					if os.IsTimeout(err){ 
+					if os.IsTimeout(err) {
 						continue
 					}
-					fmt.Printf("\rRead error: %s\n", err)
-					return
+					return // exit silently on any other error (like conn closed)
 				}
-				atomic.AddInt64(&messagesReceived, 1) // Increment received message count
+
+				atomic.AddInt64(&messagesReceived, 1)
+				receivedTime := time.Now()
 
 				message := strings.TrimSpace(string(buffer[:n]))
-				// Check if the message is a pong response
-				if strings.HasPrefix(message, "/pong") {
-					// Extract the message ID from the ping response
-					parts := strings.Split(message, " ")
-					if len(parts) == 3 {
-						messageID := parts[1]
-
-						latencyMutex.Lock()
-						if sentTime, exists := pingTimestamps[messageID]; exists {
-							// Calculate the latency
-							latency := time.Since(sentTime).Milliseconds()
-							atomic.AddInt64(&latencySum, latency)
-							atomic.AddInt64(&latencyCount, 1)
-							delete(pingTimestamps, messageID) // Remove the ping timestamp after processing
-						}
-						latencyMutex.Unlock()
+				parts := strings.SplitN(message, "|", 2)
+				if len(parts) == 2 {
+					sentTime, err := time.Parse(time.RFC3339Nano, parts[0])
+					if err == nil {
+						latency := receivedTime.Sub(sentTime).Nanoseconds()
+						atomic.AddInt64(&totalLatency, latency)
+						message = parts[1]
 					}
-				}else{
-					// Print the received message, trimming any trailing whitespace
-					fmt.Printf("\r%s\n", message)
-					fmt.Print("You: ")
 				}
+
+				fmt.Printf("\r%s\n", message)
+				fmt.Print("You: ")
 			}
-			
-
-			
 		}
-	}()
-
-	go func() {
-		<-sig
-		fmt.Println("\nDisconnected.")
-		close(stopChan) //Signal goroutines to stop
-		conn.Close()
-		wg.Wait() // Wait for all goroutines to finish
-		printMetrics() // Print metrics before exiting
-		os.Exit(0)
 	}()
 
 	// Main send loop: reads user input and sends it to the server
@@ -168,44 +134,45 @@ func main() {
 		}
 
 		// Send the message
-		_, err := conn.Write([]byte(text + "\n"))
+		timestamp := time.Now().Format(time.RFC3339Nano)
+		message := fmt.Sprintf("%s|%s", timestamp, text)
+
+		_, err := conn.Write([]byte(message + "\n"))
+		atomic.AddInt64(&messagesSent, 1)
 
 		// Display an error if the server is unreachable
 		if err != nil {
 			fmt.Println("Server unavailable. Could not send message.")
 			continue
 		}
-		atomic.AddInt64(&messagesSent, 1) // Increment sent message count
 	}
 }
 
-// printMetrics prints the metrics of the chat session
 func printMetrics() {
 	duration := time.Since(startTime).Seconds()
 	received := atomic.LoadInt64(&messagesReceived)
-    sent := atomic.LoadInt64(&messagesSent)
-    latencySumValue := atomic.LoadInt64(&latencySum)
-    latencyCountValue := atomic.LoadInt64(&latencyCount)
+	sent := atomic.LoadInt64(&messagesSent)
+	latencySumValue := atomic.LoadInt64(&totalLatency)
 
-    var averageLatency float64
-    if latencyCountValue > 0 {
-        averageLatency = float64(latencySumValue) / float64(latencyCountValue)
-    } else {
-        averageLatency = 0 // No latency data available
-    }
+	var averageLatency float64
+	if received > 0 {
+		averageLatency = float64(latencySumValue) / float64(received) / 1e6
+	} else {
+		averageLatency = 0
+	}
 
-    fmt.Printf("\n--- Metrics ---\n")
-    fmt.Printf("Messages Sent: %d\n", sent)
-    fmt.Printf("Messages Received: %d\n", received)
-    if sent > 0 {
-        fmt.Printf("Packet Loss: %.2f%%\n", 100*(1-float64(received)/float64(sent)))
-    } else {
-        fmt.Printf("Packet Loss: N/A\n")
-    }
-    if duration > 0 {
-        fmt.Printf("Throughput: %.2f messages/sec\n", float64(received)/duration)
-    } else {
-        fmt.Printf("Throughput: N/A\n")
-    }
-    fmt.Printf("Average Latency: %.2f ms\n", averageLatency)
+	fmt.Printf("\n--- Metrics ---\n")
+	fmt.Printf("Messages Sent: %d\n", sent)
+	fmt.Printf("Messages Received: %d\n", received)
+	if sent > 0 {
+		fmt.Printf("Packet Loss: %.2f%%\n", 100*(1-float64(received)/float64(sent)))
+	} else {
+		fmt.Printf("Packet Loss: N/A\n")
+	}
+	if duration > 0 {
+		fmt.Printf("Throughput: %.2f messages/sec\n", float64(received)/duration)
+	} else {
+		fmt.Printf("Throughput: N/A\n")
+	}
+	fmt.Printf("Average Latency: %.2f ms\n", averageLatency)
 }
