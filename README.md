@@ -17,7 +17,8 @@ This project is a Go-based terminal chat application that demonstrates the diffe
 ## Presentation
 
 - [PowerPoint Presentation](https://docs.google.com/presentation/d/1rrMZR5bDRnfjTCoWR7U5MIaAHsUWP42KLefw3SsItj8/edit?usp=sharing)
-- [YouTube Video (Presentation & Demo)](https://youtu.be/C_jKo7FZjUQ)
+- [YouTube Video Part 1 (Presentation)](https://youtu.be/NIGO-ED2KcI)
+- [YouTube Video Part 2 (Demo)](https://youtu.be/Ow9a05wKbHc)
 
 ## Running the Project
 
