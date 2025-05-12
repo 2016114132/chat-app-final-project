@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -106,6 +107,30 @@ func main() {
 
 		// Skip sending if the message is empty
 		if text == "" {
+			continue
+		}
+
+		// Command line to send spam messages
+		if strings.HasPrefix(text, "/spam ") {
+			countStr := strings.TrimPrefix(text, "/spam ")
+			count, err := strconv.Atoi(countStr)
+			if err != nil || count <= 0 {
+				fmt.Println("Usage: /spam <positive number>")
+				continue
+			}
+
+			for i := 0; i < count; i++ {
+				msg := fmt.Sprintf("Spam %d", i+1)
+				timestamp := time.Now().Format(time.RFC3339Nano)
+				message := fmt.Sprintf("%s|%s", timestamp, msg)
+				_, err := conn.Write([]byte(message + "\n"))
+				if err != nil {
+					fmt.Println("Failed to send spam message:", err)
+					break
+				}
+				atomic.AddInt64(&messagesSent, 1)
+				time.Sleep(20 * time.Millisecond) // optional: give some breathing room
+			}
 			continue
 		}
 
